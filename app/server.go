@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -33,7 +34,21 @@ func main() {
 	data := string(buf[:n])
 	log.Println("Received data", data)
 
-	_, err = conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+	lines := strings.Split(data, "\r\n")
+	firstLinePart := strings.Split(lines[0], " ")
+	verb := firstLinePart[0]
+	path := firstLinePart[1]
+	version := firstLinePart[2]
+	log.Println("Verb", verb)
+	log.Println("Path", path)
+	log.Println("Version", version)
+	var response string
+	if path == "/" {
+		response = "200 OK"
+	} else {
+		response = "404 Not Found"
+	}
+	_, err = conn.Write([]byte("HTTP/1.1 " + response + "\r\n\r\n"))
 	if err != nil {
 		fmt.Println("Error writing data: ", err.Error())
 		return
