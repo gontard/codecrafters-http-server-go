@@ -5,21 +5,16 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
-
-	// Uncomment this block to pass the first stage
-
 	listener, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
-
 	conn, err := listener.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
@@ -42,13 +37,18 @@ func main() {
 	log.Println("Verb", verb)
 	log.Println("Path", path)
 	log.Println("Version", version)
-	var response string
+	CRLF := "\r\n"
 	if path == "/" {
-		response = "200 OK"
+		_, err = conn.Write([]byte("HTTP/1.1 200 OK" + CRLF + CRLF))
+	} else if strings.HasPrefix(path, "/echo/") {
+		value := strings.TrimPrefix(path, "/echo/")
+		_, err = conn.Write([]byte("HTTP/1.1 200 OK" + CRLF +
+			"Content-Type: text/plain" + CRLF +
+			"Content-Length: " + strconv.Itoa(len(value)) + CRLF + CRLF +
+			value + CRLF))
 	} else {
-		response = "404 Not Found"
+		_, err = conn.Write([]byte("HTTP/1.1 404 Not Found" + CRLF + CRLF))
 	}
-	_, err = conn.Write([]byte("HTTP/1.1 " + response + "\r\n\r\n"))
 	if err != nil {
 		fmt.Println("Error writing data: ", err.Error())
 		return
