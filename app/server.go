@@ -53,15 +53,25 @@ func handleClient(conn net.Conn, dir string) {
 		headers["Content-Type"] = "text/plain"
 		headers["Content-Length"] = strconv.Itoa(len(body))
 	} else if strings.HasPrefix(req.Path, "/files/") {
-		fileName := strings.TrimPrefix(req.Path, "/files/")
-		fileContent, err := os.ReadFile(dir + "/" + fileName)
-		if err != nil {
-			status = "404 Not Found"
-		} else {
-			body = string(fileContent)
-			headers["Content-Type"] = "application/octet-stream"
-			headers["Content-Length"] = strconv.Itoa(len(body))
-			body = string(fileContent)
+		if req.Verb == "GET" {
+			fileName := strings.TrimPrefix(req.Path, "/files/")
+			fileContent, err := os.ReadFile(dir + "/" + fileName)
+			if err != nil {
+				status = "404 Not Found"
+			} else {
+				body = string(fileContent)
+				headers["Content-Type"] = "application/octet-stream"
+				headers["Content-Length"] = strconv.Itoa(len(body))
+				body = string(fileContent)
+			}
+		} else if req.Verb == "POST" {
+			fileName := strings.TrimPrefix(req.Path, "/files/")
+			err := os.WriteFile(dir+"/"+fileName, []byte(*req.Body), 0644)
+			if err != nil {
+				status = "500 Internal Server Error"
+			} else {
+				status = "201 Created"
+			}
 		}
 	} else if req.Path != "/" {
 		status = "404 Not Found"
@@ -84,6 +94,7 @@ type HttpReq struct {
 	Path    string
 	Version string
 	Headers map[string]string
+	Body    *string
 }
 
 type HttpResp struct {
@@ -100,8 +111,12 @@ func parseRequest(data string) *HttpReq {
 	path := firstLinePart[1]
 	version := firstLinePart[2]
 	headers := make(map[string]string)
+	var body string
 	for i := 1; i < len(lines); i++ {
 		if lines[i] == "" {
+			if i+1 < len(lines) {
+				body = lines[i+1]
+			}
 			break
 		}
 		parts := strings.Split(lines[i], ": ")
@@ -112,6 +127,7 @@ func parseRequest(data string) *HttpReq {
 		Path:    path,
 		Version: version,
 		Headers: headers,
+		Body:    &body,
 	}
 }
 
