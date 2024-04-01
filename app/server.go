@@ -28,29 +28,79 @@ func main() {
 	}
 	data := string(buf[:n])
 	log.Println("Received data", data)
+	req := parseRequest(data)
+	status := "200 OK"
+	headers := map[string]string{}
+	var body string
+	if strings.HasPrefix(req.Path, "/echo/") {
+		body = strings.TrimPrefix(req.Path, "/echo/")
+		headers["Content-Type"] = "text/plain"
+		headers["Content-Length"] = strconv.Itoa(len(body))
+	} else if req.Path == "/user-agent" {
+		body = req.Headers["User-Agent"]
+		headers["Content-Type"] = "text/plain"
+		headers["Content-Length"] = strconv.Itoa(len(body))
+	} else if req.Path != "/" {
+		status = "404 Not Found"
+	}
+	resp := &HttpResp{
+		Version: "HTTP/1.1",
+		Status:  status,
+		Headers: headers,
+		Body:    &body,
+	}
+	_, err = conn.Write([]byte(responseToString(resp)))
+	if err != nil {
+		fmt.Println("Error writing data: ", err.Error())
+		return
+	}
+}
 
+type HttpReq struct {
+	Verb    string
+	Path    string
+	Version string
+	Headers map[string]string
+}
+
+type HttpResp struct {
+	Version string
+	Status  string
+	Headers map[string]string
+	Body    *string
+}
+
+func parseRequest(data string) *HttpReq {
 	lines := strings.Split(data, "\r\n")
 	firstLinePart := strings.Split(lines[0], " ")
 	verb := firstLinePart[0]
 	path := firstLinePart[1]
 	version := firstLinePart[2]
-	log.Println("Verb", verb)
-	log.Println("Path", path)
-	log.Println("Version", version)
+	headers := make(map[string]string)
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "" {
+			break
+		}
+		parts := strings.Split(lines[i], ": ")
+		headers[parts[0]] = parts[1]
+	}
+	return &HttpReq{
+		Verb:    verb,
+		Path:    path,
+		Version: version,
+		Headers: headers,
+	}
+}
+
+func responseToString(resp *HttpResp) string {
 	CRLF := "\r\n"
-	if path == "/" {
-		_, err = conn.Write([]byte("HTTP/1.1 200 OK" + CRLF + CRLF))
-	} else if strings.HasPrefix(path, "/echo/") {
-		value := strings.TrimPrefix(path, "/echo/")
-		_, err = conn.Write([]byte("HTTP/1.1 200 OK" + CRLF +
-			"Content-Type: text/plain" + CRLF +
-			"Content-Length: " + strconv.Itoa(len(value)) + CRLF + CRLF +
-			value + CRLF))
-	} else {
-		_, err = conn.Write([]byte("HTTP/1.1 404 Not Found" + CRLF + CRLF))
+	result := resp.Version + " " + resp.Status + CRLF
+	for key, value := range resp.Headers {
+		result += key + ": " + value + CRLF
 	}
-	if err != nil {
-		fmt.Println("Error writing data: ", err.Error())
-		return
+	result += CRLF
+	if resp.Body != nil {
+		result += *resp.Body
 	}
+	return result
 }
