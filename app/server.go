@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -10,6 +11,9 @@ import (
 )
 
 func main() {
+	var dir string
+	flag.StringVar(&dir, "directory", "", "Directory path to use")
+	flag.Parse()
 	listener, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
@@ -21,12 +25,13 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go handleClient(conn)
+		go handleClient(conn, dir)
 	}
 }
 
-func handleClient(conn net.Conn) {
+func handleClient(conn net.Conn, dir string) {
 	defer conn.Close()
+	fmt.Println("Directory:", dir)
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {
@@ -47,6 +52,17 @@ func handleClient(conn net.Conn) {
 		body = req.Headers["User-Agent"]
 		headers["Content-Type"] = "text/plain"
 		headers["Content-Length"] = strconv.Itoa(len(body))
+	} else if strings.HasPrefix(req.Path, "/files/") {
+		fileName := strings.TrimPrefix(req.Path, "/files/")
+		fileContent, err := os.ReadFile(dir + "/" + fileName)
+		if err != nil {
+			status = "404 Not Found"
+		} else {
+			body = string(fileContent)
+			headers["Content-Type"] = "application/octet-stream"
+			headers["Content-Length"] = strconv.Itoa(len(body))
+			body = string(fileContent)
+		}
 	} else if req.Path != "/" {
 		status = "404 Not Found"
 	}
